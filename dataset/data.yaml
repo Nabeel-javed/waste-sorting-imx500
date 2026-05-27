@@ -1,0 +1,13 @@
+path: ./dataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: plastic_bottle
+  1: can
+  2: paper
+  3: cardboard
+  4: glass_jar
+  5: food_wrapper
+

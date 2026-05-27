@@ -1,0 +1,2 @@
+"""Waste sorting assistant package."""
+
