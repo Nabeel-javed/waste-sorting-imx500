@@ -4,7 +4,6 @@ __pycache__/
 *.pyc
 runs/
 *.pt
-!models/best.pt
 dataset/images/raw/*
 dataset/labels/raw/*
 examples/screenshots/*

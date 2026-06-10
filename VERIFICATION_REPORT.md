@@ -10,6 +10,35 @@ Path:
 
 Date verified: 2026-05-28
 
+## Latest Update
+
+This report was refreshed after the final pre-dataset polish pass.
+
+Files changed in that pass:
+
+- `.gitignore`: removed the `!models/best.pt` exception so trained weights remain ignored by default.
+- `README.md`: added `Next Step: Dataset Collection` and clarified that `models/best.pt` is local/ignored unless intentionally packaged.
+- `VERIFICATION_REPORT.md`: added this audit/update record and the latest verification evidence.
+
+Current status:
+
+- Ready for dataset collection.
+- No training was run.
+- No public datasets were downloaded.
+- No fake images, labels, or weights were created.
+- Current uncommitted repo changes are limited to `.gitignore`, `README.md`, and `VERIFICATION_REPORT.md`.
+
+## Final Pre-Dataset Audit
+
+Audit completed before dataset collection:
+
+- Repository file tree still matches the approved Plan v2 skeleton.
+- README commands were checked against the implemented argparse options for all scripts.
+- `.gitignore` was corrected so trained `.pt` model weights, including `models/best.pt`, are ignored by default.
+- `models/.gitkeep` and `models/exported/.gitkeep` remain tracked placeholders.
+- README now includes `Next Step: Dataset Collection` with target counts, required classes, and capture tips.
+- Unknown class fallback was confirmed without downloading a model or using a camera.
+
 ## What Was Built
 
 This repository is a complete implementation-ready skeleton for the university embedded computer vision project. It follows the updated Claude Plan v2 and is desktop-testable before IMX500 deployment.
@@ -206,6 +235,64 @@ Covered behavior:
 - Left/center/right virtual zone mapping is correct.
 - Unknown classes are never treated as correct-bin placements.
 
+### 4. Git Ignore Check
+
+Command:
+
+```bash
+git check-ignore -v models/best.pt || true
+git check-ignore -v models/.gitkeep || true
+git check-ignore -v models/exported/.gitkeep || true
+```
+
+Result:
+
+```text
+.gitignore:6:*.pt models/best.pt
+```
+
+This confirms `models/best.pt` is ignored by default. The `.gitkeep` files produced no ignore match, so they remain eligible to be tracked.
+
+### 5. README CLI Audit
+
+README command examples were checked against implemented CLI arguments:
+
+| Script | README command status |
+| --- | --- |
+| `src/train.py` | PASS |
+| `src/validate.py` | PASS |
+| `src/infer_image.py` | PASS |
+| `src/infer_video.py` | PASS |
+| `src/webcam_demo.py` | PASS |
+| `src/capture_dataset.py` | PASS |
+| `src/split_dataset.py` | PASS |
+| `src/export_imx500.py` | PASS |
+
+### 6. Unknown Class Fallback Check
+
+Command:
+
+```bash
+.venv/bin/python - <<'PY'
+from src.bin_logic import UNKNOWN_BIN, format_recommendation, is_known_class
+from src.zone_logic import expected_zone, check_zone_correctness
+
+assert format_recommendation("bottle", 0.5).endswith(UNKNOWN_BIN)
+assert is_known_class("bottle") is False
+assert expected_zone("bottle") is None
+assert check_zone_correctness("bottle", "left") is False
+print("unknown class fallback: PASS")
+PY
+```
+
+Result:
+
+```text
+unknown class fallback: PASS
+```
+
+In the webcam demo, unknown classes from stock COCO models are colored yellow and displayed as `Unknown / no bin mapping`. Zone checks only run for known project classes, so detections such as `bottle` or `person` do not crash the demo.
+
 ## How You Can Verify Manually
 
 ### Install Dependencies
@@ -322,4 +409,3 @@ These are outside skeleton creation and must be done with real data/hardware:
 - The current `models/` folder intentionally has no `best.pt`.
 - `src/export_imx500.py` is ready for the trained model, but cannot produce IMX500 artifacts until `models/best.pt` exists.
 - The exact Raspberry Pi object-detection demo command may depend on the installed `imx500-all` package version.
-

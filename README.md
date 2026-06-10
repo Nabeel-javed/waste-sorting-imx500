@@ -62,6 +62,43 @@ class_id x_center y_center width height
 
 All box values are normalized between `0` and `1`.
 
+## Next Step: Dataset Collection
+
+Collect 150-250 images total if possible. The minimum course requirement is 100 labeled images, but a larger and more diverse dataset will make the webcam demo more reliable.
+
+Use these six classes:
+
+- `plastic_bottle`
+- `can`
+- `paper`
+- `cardboard`
+- `glass_jar`
+- `food_wrapper`
+
+Recommended per-class targets:
+
+| Class | Recommended images |
+| --- | ---: |
+| `plastic_bottle` | 30-40 |
+| `can` | 30-40 |
+| `paper` | 25-35 |
+| `cardboard` | 30-40 |
+| `glass_jar` | 25-35 |
+| `food_wrapper` | 30-40 |
+
+`food_wrapper` is useful for a realistic demo, but it is visually diverse. If it performs poorly after the first training run, it can be removed later and the project can continue with the other five classes.
+
+Capture tips:
+
+- Use different angles: top-down, side, diagonal.
+- Use different distances: close, medium, far.
+- Use different lighting: daylight, indoor light, dimmer scenes.
+- Use different backgrounds: table, paper mat, darker surface.
+- Include single-object scenes for clean learning.
+- Include multiple-object scenes for the final demo.
+- Include partial occlusion, such as a hand or another object covering part of the item.
+- Place objects in different left/center/right table zones if you plan to demo wrong-bin detection.
+
 ## Dataset Workflow
 
 ### Preferred: Roboflow or CVAT pre-split export
@@ -114,7 +151,7 @@ After training, either copy the best weights:
 cp runs/detect/waste_sorting_yolov8n/weights/best.pt models/best.pt
 ```
 
-or pass the training run path directly to the inference scripts.
+or pass the training run path directly to the inference scripts. `models/best.pt` is ignored by Git by default so trained weights are not accidentally committed; include model weights only if you intentionally prepare a final ZIP or release package.
 
 ## Validation
 
@@ -227,4 +264,3 @@ The unit tests cover deterministic bin mapping and zone logic. They do not requi
 - Add audio feedback.
 - Add multilingual labels.
 - Add an automatic sorting actuator.
-
