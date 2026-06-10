@@ -49,6 +49,24 @@ val:   108 images, 390 boxes
 test:  108 images, 477 boxes
 ```
 
+A stronger public-data demo dataset can be built with:
+
+```bash
+python src/import_public_demo_dataset.py \
+  --full-train \
+  --max-train-per-class 500 \
+  --max-val-per-class 80 \
+  --max-test-per-class 80
+```
+
+Result used for the improved intermediate demo model:
+
+```text
+train: 2757 images, 19238 boxes
+val:   258 images, 849 boxes
+test:  252 images, 924 boxes
+```
+
 Temporary class remap:
 
 | Public class | Project class |
@@ -113,6 +131,55 @@ Per-class:
 | `food_wrapper` | 0.0620 | 0.3673 | 0.0934 | 0.0449 |
 
 The metrics are low because this is a short five-epoch run on a temporary public class remap. The useful part for the intermediate demo is that the full pipeline works end to end.
+
+## Improved Demo Model
+
+A stronger temporary model was trained from the larger public train split. Training was stopped after the metric improved enough for the intermediate demo.
+
+Command:
+
+```bash
+python src/train.py \
+  --model yolov8n.pt \
+  --data dataset/data.yaml \
+  --epochs 15 \
+  --imgsz 512 \
+  --batch 8 \
+  --device mps \
+  --name waste_sorting_public_demo_full15
+```
+
+Active model:
+
+```text
+models/best.pt
+```
+
+Backup of the earlier 5-epoch model:
+
+```text
+models/demo_backups/best_public_demo_5epochs.pt
+```
+
+Improved validation result:
+
+```text
+mAP50:     0.2480
+mAP50-95:  0.1606
+Precision: 0.3404
+Recall:    0.3151
+```
+
+Per-class:
+
+| Class | Precision | Recall | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: |
+| `plastic_bottle` | 0.3530 | 0.3677 | 0.2931 | 0.1864 |
+| `can` | 0.3958 | 0.5017 | 0.4113 | 0.2824 |
+| `paper` | 0.4741 | 0.3947 | 0.3657 | 0.2657 |
+| `cardboard` | 0.0839 | 0.2500 | 0.0719 | 0.0330 |
+| `glass_jar` | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| `food_wrapper` | 0.3953 | 0.0612 | 0.0978 | 0.0355 |
 
 ## Demo Commands
 

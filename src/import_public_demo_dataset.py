@@ -12,6 +12,7 @@ from typing import Any
 
 
 DATASET_URLS = {
+    "train": "https://huggingface.co/datasets/keremberke/garbage-object-detection/resolve/main/data/train.zip",
     "valid": "https://huggingface.co/datasets/keremberke/garbage-object-detection/resolve/main/data/valid.zip",
     "test": "https://huggingface.co/datasets/keremberke/garbage-object-detection/resolve/main/data/test.zip",
 }
@@ -46,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-train-per-class", type=int, default=120, help="Approximate max train images per class.")
     parser.add_argument("--max-val-per-class", type=int, default=30, help="Approximate max val images per class.")
     parser.add_argument("--max-test-per-class", type=int, default=30, help="Approximate max test images per class.")
+    parser.add_argument("--full-train", action="store_true", help="Download/use the larger public train.zip split.")
     parser.add_argument("--seed", type=int, default=42, help="Deterministic shuffle seed.")
     parser.add_argument("--keep-existing", action="store_true", help="Do not clear existing train/val/test folders first.")
     return parser.parse_args()
@@ -188,7 +190,9 @@ def main() -> int:
     download_dir = Path(args.download_dir)
     dataset_dir = Path(args.dataset_dir)
 
-    for split, url in DATASET_URLS.items():
+    requested_splits = ("train", "valid", "test") if args.full_train else ("valid", "test")
+    for split in requested_splits:
+        url = DATASET_URLS[split]
         zip_path = download_dir / f"{split}.zip"
         extract_dir = download_dir / split
         download_file(url, zip_path)
@@ -198,7 +202,7 @@ def main() -> int:
         clear_project_split_dirs(dataset_dir)
 
     train_counts = write_yolo_split(
-        download_dir / "valid",
+        download_dir / ("train" if args.full_train else "valid"),
         dataset_dir,
         "train",
         args.max_train_per_class,
