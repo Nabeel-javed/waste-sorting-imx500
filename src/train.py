@@ -14,19 +14,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--imgsz", type=int, default=640, help="Training image size.")
     parser.add_argument("--batch", type=int, default=16, help="Batch size.")
     parser.add_argument("--name", default="waste_sorting_yolov8n", help="Ultralytics run name.")
+    parser.add_argument("--device", default=None, help="Training device, e.g. cpu, mps, 0. Defaults to Ultralytics auto.")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     model = YOLO(args.model)
-    result = model.train(
-        data=args.data,
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        name=args.name,
-    )
+    train_kwargs = {
+        "data": args.data,
+        "epochs": args.epochs,
+        "imgsz": args.imgsz,
+        "batch": args.batch,
+        "name": args.name,
+    }
+    if args.device:
+        train_kwargs["device"] = args.device
+
+    result = model.train(**train_kwargs)
 
     save_dir = Path(getattr(result, "save_dir", Path("runs") / "detect" / args.name))
     best_path = save_dir / "weights" / "best.pt"
@@ -37,4 +42,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

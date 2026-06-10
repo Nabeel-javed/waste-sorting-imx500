@@ -20,6 +20,15 @@ def as_float(value: Any) -> float:
     return float(value)
 
 
+def sequence_value(values: Any, index: int, default: float = 0.0) -> float:
+    if values is None:
+        return default
+    try:
+        return as_float(values[index])
+    except Exception:
+        return default
+
+
 def main() -> int:
     args = parse_args()
     metrics = YOLO(args.model).val(data=args.data, imgsz=args.imgsz)
@@ -36,14 +45,21 @@ def main() -> int:
     print(f"Recall:   {as_float(getattr(box, 'mr', 0.0)):.4f}")
 
     names = getattr(metrics, "names", {}) or {}
-    if names and hasattr(box, "class_result"):
+    if names:
         print("\nPer-class metrics")
         print(f"{'class':20s} {'P':>8s} {'R':>8s} {'mAP50':>8s} {'mAP50-95':>10s}")
+        class_indexes = [int(class_id) for class_id in getattr(box, "ap_class_index", [])]
+        metrics_by_class: dict[int, tuple[float, float, float, float]] = {}
+        for metric_index, class_id in enumerate(class_indexes):
+            metrics_by_class[class_id] = (
+                sequence_value(getattr(box, "p", None), metric_index),
+                sequence_value(getattr(box, "r", None), metric_index),
+                sequence_value(getattr(box, "ap50", None), metric_index),
+                sequence_value(getattr(box, "ap", None), metric_index),
+            )
+
         for class_id, class_name in sorted(names.items()):
-            try:
-                precision, recall, map50, map_all = box.class_result(int(class_id))
-            except Exception:
-                continue
+            precision, recall, map50, map_all = metrics_by_class.get(int(class_id), (0.0, 0.0, 0.0, 0.0))
             print(
                 f"{str(class_name):20s} "
                 f"{as_float(precision):8.4f} "
@@ -56,4 +72,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

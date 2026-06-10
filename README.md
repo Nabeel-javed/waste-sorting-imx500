@@ -133,6 +133,16 @@ Capture tips:
 
 4. Train the model.
 
+### Temporary: public dataset branch for intermediate demo
+
+This branch also includes a temporary public-data importer for the intermediate demo:
+
+```bash
+python src/import_public_demo_dataset.py
+```
+
+It downloads a public Hugging Face garbage-detection dataset, converts COCO annotations to YOLO format, and applies a broad temporary class remap into this project's six classes. This is only for showing a working pipeline before the final self-collected dataset is ready. See `docs/public_dataset_demo.md`.
+
 ## Training
 
 ```bash
@@ -142,6 +152,7 @@ python src/train.py \
   --epochs 80 \
   --imgsz 640 \
   --batch 16 \
+  --device mps \
   --name waste_sorting_yolov8n
 ```
 
