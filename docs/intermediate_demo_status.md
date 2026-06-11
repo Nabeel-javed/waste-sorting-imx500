@@ -208,6 +208,67 @@ Keyboard controls:
 - `z`: toggle zone mode
 - `h`: toggle help overlay
 
+## Raspberry Pi / IMX500 Demo Status
+
+Pi checked at:
+
+```text
+172.20.10.3
+```
+
+The Raspberry Pi can be reached over SSH:
+
+```bash
+ssh pi@172.20.10.3
+```
+
+The IMX500 camera is detected:
+
+```bash
+rpicam-hello --list-cameras
+```
+
+Expected camera line:
+
+```text
+0 : imx500 [4056x3040 10-bit RGGB]
+```
+
+Headless camera test:
+
+```bash
+rpicam-hello -t 1000 --nopreview
+```
+
+For the intermediate demo, the custom waste model should be shown on the MacBook desktop demo. The Pi can be shown as hardware progress: IMX500 connected, camera working, and stock IMX500 model runnable. This is honest because the custom YOLO-to-IMX500 packaging step still needs the Linux/Sony/Raspberry Pi export pipeline.
+
+The direct custom export from macOS is blocked by Ultralytics:
+
+```text
+IMX: export failure: Export only supported on Linux.
+```
+
+Next step after the intermediate demo:
+
+```bash
+yolo export model=models/best.pt format=imx data=dataset/data.yaml imgsz=640
+imx500-package -i packerOut.zip -o ./rpk_out
+```
+
+If a VNC live Pi proof is needed, use the patched stock IMX500 demo on the Pi:
+
+```bash
+ssh pi@172.20.10.3
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+export DISPLAY=:0
+python3 /home/pi/waste-sorting/imx500_stock_demo_qtgl.py \
+  --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk \
+  --threshold 0.45
+```
+
+This runs a stock COCO detector on the IMX500, not the custom waste model. It is only for proving the AI camera path.
+
 ## What To Tell The Professor
 
 - The project codebase is complete enough for desktop testing.
