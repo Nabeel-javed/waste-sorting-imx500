@@ -269,6 +269,54 @@ python3 /home/pi/waste-sorting/imx500_stock_demo_qtgl.py \
 
 This runs a stock COCO detector on the IMX500, not the custom waste model. It is only for proving the AI camera path.
 
+## Custom Model On Raspberry Pi CPU
+
+The custom `models/best.pt` model can also run directly on the Raspberry Pi through Python. This uses the Raspberry Pi CPU with Picamera2 frames, not the IMX500 accelerator.
+
+Pi setup used:
+
+```bash
+sudo apt-get install -y python3-torch python3-torchvision python3-yaml python3-pandas
+python3 -m venv --system-site-packages /home/pi/waste-sorting-venv
+/home/pi/waste-sorting-venv/bin/pip install --upgrade pip setuptools wheel
+/home/pi/waste-sorting-venv/bin/pip install --no-deps ultralytics==8.4.56
+```
+
+Project copy on Pi:
+
+```text
+/home/pi/waste-sorting-project
+```
+
+Headless smoke test:
+
+```bash
+cd /home/pi/waste-sorting-project
+/home/pi/waste-sorting-venv/bin/python src/pi_picamera_demo.py \
+  --model models/best.pt \
+  --conf 0.25 \
+  --imgsz 416 \
+  --zones \
+  --headless \
+  --max-frames 2
+```
+
+Live VNC demo command:
+
+```bash
+cd /home/pi/waste-sorting-project
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+/home/pi/waste-sorting-venv/bin/python src/pi_picamera_demo.py \
+  --model models/best.pt \
+  --conf 0.25 \
+  --imgsz 416 \
+  --zones
+```
+
+This is acceptable for showing that the same custom model has been copied to the Pi. It will be slower than the MacBook. The final embedded target remains the IMX500 `.rpk` export path.
+
 ## What To Tell The Professor
 
 - The project codebase is complete enough for desktop testing.
