@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections import Counter, deque
 from pathlib import Path
 
 import cv2
@@ -42,7 +43,14 @@ from src.zone_logic import (
 KNOWN_COLOR = (0, 255, 0)
 UNKNOWN_COLOR = (0, 255, 255)
 WRONG_COLOR = (0, 0, 255)
-BANNER_HOLD_S = 1.5  # keep the last result on screen this long after it disappears
+BANNER_HOLD_S = 1.5  # keep the last verdict on screen this long after votes stop
+SCAN_COLOR = (0, 220, 255)
+
+# Multi-frame voting: a verdict is announced only when one class wins a clear
+# majority of recent frames. Single-frame flicker and ghosts never reach the UI.
+VOTE_WINDOW_S = 1.5   # rolling window of per-frame votes
+MIN_VOTES = 6         # frames with a detection required before any verdict
+VOTE_SHARE = 0.6      # winning class must hold this share of the votes
 
 
 def parse_args() -> argparse.Namespace:
@@ -124,7 +132,7 @@ def parse_detections(imx500, picam2, metadata, labels, threshold, debug=False):
 def draw_scan_banner(frame, banner: dict | None) -> None:
     """Big top-centre banner: what the camera sees and which bin it belongs in."""
     if banner:
-        title, subtitle, color = banner["title"], banner["sub"], KNOWN_COLOR
+        title, subtitle, color = banner["title"], banner["sub"], banner.get("color", KNOWN_COLOR)
     else:
         title, subtitle, color = "SCAN AN OBJECT", "Hold an item in front of the camera", (200, 200, 200)
 
@@ -212,8 +220,10 @@ def main() -> int:
         "detections": None,
         "zone_mode": bool(args.zones),
         "banner": None,
+        "last_verdict": None,
         "debug_left": 1 if args.debug_outputs else 0,
     }
+    votes: deque[tuple[float, str, float]] = deque()
 
     def pre_callback(request):
         with MappedArray(request, "main") as m:
@@ -236,18 +246,48 @@ def main() -> int:
             if debug:
                 state["debug_left"] -= 1
 
-            # Scan-mode banner: show the best detection and hold it briefly so the
-            # display does not flicker when confidence dips between frames.
+            # Multi-frame voting: collect the best detection per frame, announce a
+            # verdict only when one class wins a clear majority of the window.
+            now = time.monotonic()
             known = [d for d in state["detections"] or [] if is_known_class(d.class_name)]
             if known:
                 best = max(known, key=lambda d: d.conf)
+                votes.append((now, best.class_name, best.conf))
+            while votes and votes[0][0] < now - VOTE_WINDOW_S:
+                votes.popleft()
+
+            verdict = None
+            if len(votes) >= MIN_VOTES:
+                counts = Counter(cls for _, cls, _ in votes)
+                top_class, top_n = counts.most_common(1)[0]
+                if top_n / len(votes) >= VOTE_SHARE:
+                    top_confs = [c for _, cls, c in votes if cls == top_class]
+                    verdict = (top_class, sum(top_confs) / len(top_confs))
+
+            if verdict:
+                verdict_class, verdict_conf = verdict
                 state["banner"] = {
-                    "title": f"{best.class_name.replace('_', ' ').upper()}  ({best.conf:.0%})",
-                    "sub": f"Put it in: {get_recommended_bin(best.class_name)}",
-                    "expires": time.monotonic() + BANNER_HOLD_S,
+                    "title": f"{verdict_class.replace('_', ' ').upper()}  ({verdict_conf:.0%})",
+                    "sub": f"Put it in: {get_recommended_bin(verdict_class)}",
+                    "expires": now + BANNER_HOLD_S,
                 }
-            elif state["banner"] and time.monotonic() > state["banner"]["expires"]:
+                if args.headless and verdict_class != state["last_verdict"]:
+                    print(f"VERDICT: {verdict_class} -> {get_recommended_bin(verdict_class)}", flush=True)
+                state["last_verdict"] = verdict_class
+            elif votes:
+                # Detections are coming in but no majority yet: show progress.
+                held = state["banner"] and now <= state["banner"]["expires"] and state["last_verdict"]
+                if not held:
+                    state["banner"] = {
+                        "title": "SCANNING...",
+                        "sub": f"Hold the object steady ({min(len(votes), MIN_VOTES)}/{MIN_VOTES})",
+                        "color": SCAN_COLOR,
+                        "expires": now,
+                    }
+                    state["last_verdict"] = None
+            elif state["banner"] and now > state["banner"]["expires"]:
                 state["banner"] = None
+                state["last_verdict"] = None
 
             if args.headless:
                 dets = state["detections"] or []
