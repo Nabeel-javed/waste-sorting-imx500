@@ -5,7 +5,7 @@ __pycache__/
 *.cache
 runs/
 *.pt
-data/public/
+data/
 dataset/images/train/*
 dataset/images/val/*
 dataset/images/test/*
@@ -18,4 +18,5 @@ examples/screenshots/*
 examples/public_demo_inputs/*
 examples/public_demo_outputs/*
 models/exported/*
+models/best_imx_model/
 !**/.gitkeep

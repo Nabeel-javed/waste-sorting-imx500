@@ -2,7 +2,7 @@
 
 A real-time edge-AI waste sorting assistant that detects common waste objects, recommends the correct recycling bin, and prepares the model path for Sony IMX500 AI camera deployment.
 
-The project currently runs end-to-end on a MacBook and on a Raspberry Pi using the Pi camera. The Raspberry Pi version currently runs the custom YOLO `.pt` model on the Pi CPU. The final embedded target is to convert the trained model into the IMX500 `.rpk` format so inference can run on the Sony IMX500 accelerator.
+The project runs end-to-end on a MacBook and on a Raspberry Pi with the Sony IMX500 AI camera. The custom YOLO model has been converted to the IMX500 `.rpk` format, so inference now runs **on the camera's accelerator** rather than the Pi CPU. A CPU fallback path (`src/pi_picamera_demo.py`) also exists for comparison.
 
 ## Current Project Status
 
@@ -18,7 +18,8 @@ Implemented:
 - Dataset capture helper for collecting our own images.
 - Temporary public dataset importer for early demonstration.
 - Validation script and metric reporting.
-- IMX500 export wrapper and deployment notes.
+- Working IMX500 accelerator path: Docker export -> `.rpk` -> on-camera inference (`src/imx500_camera_demo.py`).
+- Dockerized export toolchain and one-command deploy/run scripts.
 - Tests for bin mapping and zone logic.
 - Documentation and presentation outline.
 
@@ -143,7 +144,8 @@ Main modules:
 | `src/infer_image.py` | Run detection on image files or folders. |
 | `src/infer_video.py` | Run detection on video files. |
 | `src/webcam_demo.py` | Main MacBook/desktop webcam demo. |
-| `src/pi_picamera_demo.py` | Raspberry Pi demo using Picamera2 camera frames. |
+| `src/pi_picamera_demo.py` | Raspberry Pi demo running the `.pt` model on the Pi CPU (fallback/comparison). |
+| `src/imx500_camera_demo.py` | Raspberry Pi demo running the `.rpk` model on the IMX500 accelerator. |
 | `src/bin_logic.py` | Maps detected classes to bin recommendations. |
 | `src/zone_logic.py` | Implements virtual left/center/right bin zones. |
 | `src/capture_dataset.py` | Captures our own images for dataset collection. |
@@ -508,7 +510,12 @@ If it misses objects:
 python src/webcam_demo.py --model models/best.pt --camera 0 --conf 0.20 --zones
 ```
 
-## Raspberry Pi Custom Model Demo
+## Raspberry Pi CPU Demo (fallback / comparison)
+
+> The primary Pi path is now the IMX500 accelerator - see
+> [IMX500 Deployment (Working)](#imx500-deployment-working) below. This CPU demo
+> is kept for comparison: it runs the `.pt` model on the Pi CPU, which is slower
+> and does not use the camera's accelerator.
 
 The project has also been copied to the Raspberry Pi:
 
@@ -516,13 +523,11 @@ The project has also been copied to the Raspberry Pi:
 /home/pi/waste-sorting-project
 ```
 
-The custom model runs on Raspberry Pi CPU using Picamera2 frames:
+The custom model runs on the Raspberry Pi CPU using Picamera2 frames:
 
 ```text
 Pi camera frame -> Picamera2 -> YOLO best.pt on CPU -> OpenCV overlay
 ```
-
-This is not the final IMX500 accelerator path, but it proves that the same custom model can run on the Pi.
 
 Run from the Raspberry Pi VNC terminal:
 
@@ -587,62 +592,54 @@ Expected camera listing:
 0 : imx500 [4056x3040 10-bit RGGB]
 ```
 
-## IMX500 Deployment Plan
+## IMX500 Deployment (Working)
 
-The final embedded deployment should run the model on the Sony IMX500 AI camera, not only on the Raspberry Pi CPU.
-
-The final path is:
+The custom model runs on the Sony IMX500 accelerator. Three steps; see
+`docs/imx500_deployment_notes.md` for the full recipe and rationale.
 
 ```text
 models/best.pt
-        |
+        |  (1) Docker amd64 export on the Mac
         v
-Ultralytics IMX export on Linux
-        |
+models/best_imx_model/packerOut.zip + labels.txt
+        |  (2) imx500-package on the Raspberry Pi
         v
-packerOut.zip + labels.txt
-        |
+models/exported/imx/rpk_out/network.rpk
+        |  (3) src/imx500_camera_demo.py (picamera2 IMX500 device)
         v
-imx500-package on Raspberry Pi
-        |
-        v
-custom .rpk model
-        |
-        v
-Picamera2 IMX500 object detection demo
+Inference runs inside the camera.
 ```
 
-Primary export command:
+**1. Export on the Mac.** Ultralytics `format=imx` needs Sony's x86_64-Linux
+converter, so it runs in an amd64 Docker container (emulated on Apple Silicon):
 
 ```bash
-yolo export model=models/best.pt format=imx data=dataset/data.yaml imgsz=640
+scripts/export_imx500_docker.sh          # build image + export best.pt
 ```
 
-Or through the project wrapper:
+Direct `yolo export ... format=imx` on macOS is *not* supported
+(`IMX: export failure: Export only supported on Linux.`) - the Docker wrapper is
+what makes it work. Note also that Ultralytics 8.4.90 ships contradictory
+dependency pins; `docker/Dockerfile.imx500-export` pins a coherent toolchain to
+work around it.
+
+**2. Package on the Pi.**
 
 ```bash
-python src/export_imx500.py --model models/best.pt --data dataset/data.yaml --imgsz 640
+scripts/deploy_to_pi.sh                   # copy artifacts + run imx500-package
 ```
 
-Then on Raspberry Pi:
+**3. Run on the camera** (from the Pi desktop / VNC terminal):
 
 ```bash
-imx500-package -i packerOut.zip -o ./rpk_out
+/home/pi/waste-sorting-project/run_imx500_camera.sh            # live preview + zones
+/home/pi/waste-sorting-project/run_imx500_camera.sh --headless # prints detections
 ```
 
-Known issue: direct export from macOS is not supported by Ultralytics for IMX export.
-
-Observed error:
-
-```text
-IMX: export failure: Export only supported on Linux.
-```
-
-Therefore, the next final-deployment step should use:
-
-- Ubuntu GPU machine, or
-- Linux Docker environment, or
-- Raspberry Pi/Linux environment if supported and fast enough.
+This uses system `python3` with picamera2 - no torch on the Pi, because inference
+happens on the sensor. The Pi only reads output tensors and applies the same bin
+and zone logic as the desktop demo. Retraining on your own data and repeating
+steps 1-3 regenerates the `.rpk` with no code changes.
 
 ## Tests
 
@@ -666,7 +663,7 @@ This is a real-time waste sorting assistant. We use YOLOv8n for object detection
 
 For the intermediate demo, we used a temporary public garbage dataset so that the full pipeline could be demonstrated before our own labeled dataset is complete. The current model is not final accuracy. The final version will use our own 100+ labeled images from the actual table setup.
 
-The custom model runs on the MacBook and has also been copied to the Raspberry Pi where it runs with Picamera2. The IMX500 camera is detected and working. The final deployment step is converting the trained YOLO model to the IMX500 .rpk format using the Linux export and packaging pipeline.
+The custom model runs on the MacBook, and it has been deployed to the Raspberry Pi's Sony IMX500 AI camera. We converted the trained YOLO model to the IMX500 .rpk format and it now runs inference on the camera's accelerator, not the Pi CPU. The Pi only reads the detection results and applies the recycling-bin logic. The remaining work is accuracy: retraining on our own labeled dataset, after which the same export pipeline regenerates the .rpk with no code changes.
 ```
 
 ## Limitations
@@ -677,15 +674,15 @@ The custom model runs on the MacBook and has also been copied to the Raspberry P
 - Glass and plastic can be visually similar.
 - Paper and cardboard can be confused.
 - Food wrappers are highly variable.
-- Raspberry Pi `.pt` demo runs on CPU and may be slow.
-- Final IMX500 `.rpk` deployment still needs Linux export and packaging.
+- The optional `.pt` CPU demo on the Pi is slow; the IMX500 accelerator path is the primary Pi demo.
+- A real nonzero detection on the IMX500 has not yet been screenshotted (needs an object in front of the camera); the runtime and output-tensor decoding are verified on device.
 
 ## Future Work
 
-- Collect and label our own dataset.
+- Collect and label our own dataset, then re-export the `.rpk` with `scripts/export_imx500_docker.sh`.
 - Train with 80-100 epochs on the final dataset.
-- Use Ubuntu GPU access for faster training and IMX export.
-- Export and package a custom IMX500 `.rpk`.
+- Use a native x86_64 Linux / GPU machine for faster training and IMX export (Docker export on the Mac works but runs under emulation).
+- Capture a live IMX500 detection screenshot/GIF for the presentation.
 - Improve lighting and fixed camera positioning.
 - Add more classes.
 - Add audio feedback.
