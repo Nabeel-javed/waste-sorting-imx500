@@ -21,18 +21,17 @@ CLASS_REMAP = {
     "plastic": 0,  # plastic_bottle, temporary broad-class proxy
     "metal": 1,  # can, temporary broad-class proxy
     "paper": 2,
-    "cardboard": 3,
-    "glass": 4,  # glass_jar, temporary broad-class proxy
-    "biodegradable": 5,  # food_wrapper, temporary demo proxy
+    "cardboard": 2,  # merged into paper
+    "glass": 3,  # glass_jar, temporary broad-class proxy
+    "biodegradable": 4,  # food_wrapper, temporary demo proxy
 }
 
 PROJECT_CLASS_NAMES = {
     0: "plastic_bottle",
     1: "can",
     2: "paper",
-    3: "cardboard",
-    4: "glass_jar",
-    5: "food_wrapper",
+    3: "glass_jar",
+    4: "food_wrapper",
 }
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
@@ -230,7 +229,7 @@ def main() -> int:
     print("  plastic -> plastic_bottle")
     print("  metal -> can")
     print("  paper -> paper")
-    print("  cardboard -> cardboard")
+    print("  cardboard -> paper (merged)")
     print("  glass -> glass_jar")
     print("  biodegradable -> food_wrapper")
     print("\nThis is only for the intermediate demo. Replace it with your own collected dataset for final work.")

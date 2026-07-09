@@ -38,9 +38,8 @@ PROJECT_CLASS_IDS = {
     "plastic_bottle": 0,
     "can": 1,
     "paper": 2,
-    "cardboard": 3,
-    "glass_jar": 4,
-    "food_wrapper": 5,
+    "glass_jar": 3,
+    "food_wrapper": 4,
 }
 
 
@@ -60,7 +59,7 @@ FOLDER_SPECS: dict[str, FolderSpec] = {
     "plastic": FolderSpec("plastic_bottle", ["plastic bottle", "water bottle", "plastic container bottle"]),
     "glass": FolderSpec("glass_jar", ["glass bottle", "glass jar", "bottle", "jar"]),
     "paper": FolderSpec("paper", ["sheet of paper", "paper document", "flyer", "newspaper"], full_frame_fallback=True),
-    "cardboard": FolderSpec("cardboard", ["cardboard box", "piece of cardboard", "carton"], full_frame_fallback=True),
+    "cardboard": FolderSpec("paper", ["cardboard box", "piece of cardboard", "carton"], full_frame_fallback=True),
 }
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

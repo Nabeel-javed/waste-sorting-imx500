@@ -22,10 +22,10 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 
-# Project ids: 0 plastic_bottle, 1 can, 2 paper, 3 cardboard, 4 glass_jar, 5 food_wrapper
+# Project ids: 0 plastic_bottle, 1 can, 2 paper (incl. cardboard), 3 glass_jar, 4 food_wrapper
 DRINKING_PREFIX_MAP = {
     "alucan": 1,
-    "glass": 4,
+    "glass": 3,
     "hdpem": 0,
     "pet": 0,
 }
@@ -33,9 +33,9 @@ DRINKING_PREFIX_MAP = {
 # Roboflow TACO 18-class ids -> project ids ('Bottle' is skipped: mixes glass+plastic)
 TACO_ID_MAP = {
     4: 1,   # Can -> can
-    5: 3,   # Carton -> cardboard
+    5: 2,   # Carton -> paper (cardboard merged into paper)
     11: 2,  # Paper -> paper
-    12: 5,  # Plastic bag - wrapper -> food_wrapper
+    12: 4,  # Plastic bag - wrapper -> food_wrapper
 }
 
 

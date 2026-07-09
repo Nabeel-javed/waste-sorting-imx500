@@ -61,10 +61,15 @@ and the system warns when an object sits in the wrong region.
 | ---: | --- |
 | 0 | `plastic_bottle` |
 | 1 | `can` |
-| 2 | `paper` |
-| 3 | `cardboard` |
-| 4 | `glass_jar` |
-| 5 | `food_wrapper` |
+| 2 | `paper` (includes cardboard) |
+| 3 | `glass_jar` |
+| 4 | `food_wrapper` |
+
+Earlier models (v0-v3) used six classes with `cardboard` as its own class (id 3).
+The confusion matrix showed paper and cardboard constantly confused with each
+other (cardboard precision 0.432), and both map to the same physical bin, so v4
+merges cardboard into `paper`. Fewer confusable classes also makes the live
+multi-frame voting settle faster.
 
 ## Bin Mapping
 
@@ -75,8 +80,7 @@ rule layer stored in `configs/bins.yaml`:
 | --- | --- |
 | `plastic_bottle` | Plastic / Packaging |
 | `can` | Metal / Recycling |
-| `paper` | Paper |
-| `cardboard` | Paper / Cardboard |
+| `paper` | Paper / Cardboard |
 | `glass_jar` | Glass |
 | `food_wrapper` | General Waste / Packaging |
 
@@ -156,11 +160,15 @@ accuracy numbers stay comparable.
 Class remaps used:
 
 - keremberke: `plastic->plastic_bottle`, `metal->can`, `glass->glass_jar`,
-  `biodegradable->food_wrapper`, `paper`/`cardboard` direct.
+  `biodegradable->food_wrapper`, `paper` direct, `cardboard->paper`.
 - drinking-waste (by filename prefix): `AluCan->can`, `Glass->glass_jar`,
   `HDPEM/PET->plastic_bottle` (capped at 1,000 images/class).
-- TACO (by class id): `Can->can`, `Carton->cardboard`, `Paper->paper`,
+- TACO (by class id): `Can->can`, `Carton->paper`, `Paper->paper`,
   `Plastic bag & wrapper->food_wrapper`; the ambiguous `Bottle` class was skipped.
+
+The v0-v3 dataset used six classes. For v4 the existing labels were remapped
+in place on the training server (`cardboard` id 3 -> `paper` id 2; glass/wrapper
+ids shifted down), giving the merged `paper` class 9,041 training boxes.
 
 ### Semi-automatic labeling with YOLO-World
 
@@ -202,6 +210,19 @@ jitter, rotation, shear, perspective warp, +-70% scale, mixup, and (via the
 `albumentations` package) blur/median-blur/grayscale/CLAHE. They simulate live
 camera conditions that clean web photos lack, narrowing the gap between
 validation accuracy and real on-camera behavior. ~2.2 hours for 100 epochs.
+
+The deployed v4 model merges cardboard into paper (5 classes) and fine-tunes
+from the v3 weights instead of starting from COCO, which converges in 30
+epochs (~35 minutes):
+
+```bash
+yolo detect train model=runs/detect/waste_sorting_public_v3/weights/best.pt \
+  data=dataset5/data.yaml \
+  epochs=30 imgsz=640 batch=64 device=0 workers=12 cache=ram \
+  hsv_h=0.02 hsv_s=0.8 hsv_v=0.6 degrees=10 translate=0.2 scale=0.7 \
+  shear=2.0 perspective=0.0003 mixup=0.15 close_mosaic=10 \
+  name=waste_sorting_public_v4
+```
 
 ### Results per class (v3, deployed)
 
@@ -354,7 +375,8 @@ is stable and reliable.
 - `food_wrapper` is the weakest class (visually extremely diverse).
 - The IMX500 memory limit caps the model at YOLOv8n + INT8; per-frame accuracy
   is bounded by that model capacity.
-- Glass vs. plastic bottles and paper vs. cardboard remain visually confusable.
+- Glass vs. plastic bottles remain visually confusable (paper vs. cardboard
+  was solved in v4 by merging the two classes - they share a bin anyway).
 - Voting stabilizes verdicts but cannot detect an object the model never sees.
 
 ## Future Work

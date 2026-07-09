@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def default_labels() -> list[str]:
-    return ["plastic_bottle", "can", "paper", "cardboard", "glass_jar", "food_wrapper"]
+    return ["plastic_bottle", "can", "paper", "glass_jar", "food_wrapper"]
 
 
 def load_labels(labels_path: str | None) -> list[str]:

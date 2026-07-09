@@ -44,7 +44,7 @@ def main() -> int:
     if removed:
         print(f"Removed {removed} previously merged own_* files.")
 
-    class_names = ("plastic_bottle", "can", "paper", "cardboard", "glass_jar", "food_wrapper")
+    class_names = ("plastic_bottle", "can", "paper", "glass_jar", "food_wrapper")
     by_class: dict[str, list[Path]] = defaultdict(list)
     for image_path in sorted(own_images.glob("own_*.jpg")):
         matched = next((c for c in class_names if image_path.stem.startswith(f"own_{c}_")), None)
