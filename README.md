@@ -37,11 +37,14 @@ Model progression on the identical 289-image validation set:
 | v0 (intermediate demo) | 2.7k public images, 15 epochs on a MacBook | 0.248 |
 | v1 (+ own images) | 7.8k images incl. our own 202, 100 epochs on GPU server | 0.501 |
 | v2 (+ more public data) | 15.9k images from 5 sources | 0.613 |
-| **v3 (robustness training)** | same 15.9k with heavy augmentation | **0.611** |
+| v3 (robustness training) | same 15.9k with heavy augmentation | 0.611 |
+| **v4 (cardboard merged into paper)** | same data, 5 classes, fine-tuned from v3 | **0.618** |
 
-v3 is the deployed model: it matches v2 on clean validation photos while being
-far more tolerant of real camera conditions (blur, lighting, odd angles), which
-is what matters for the live demo.
+v4 is the deployed model: it keeps v3's robustness training (tolerant of blur,
+lighting, odd angles) and merges the two most-confused classes - paper and
+cardboard - into one class that shares a physical bin. Cardboard objects went
+from the weakest category (0.489 mAP50, 0.432 precision as a separate class)
+to part of a solid 0.734 class.
 
 ## Project Goal
 
@@ -224,17 +227,19 @@ yolo detect train model=runs/detect/waste_sorting_public_v3/weights/best.pt \
   name=waste_sorting_public_v4
 ```
 
-### Results per class (v3, deployed)
+### Results per class (v4, deployed)
 
 | Class | Precision | Recall | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: |
-| `plastic_bottle` | 0.733 | 0.543 | 0.650 | 0.442 |
-| `can` | 0.820 | 0.513 | 0.556 | 0.438 |
-| `paper` | 0.874 | 0.593 | 0.745 | 0.576 |
-| `cardboard` | 0.432 | 0.520 | 0.489 | 0.399 |
-| `glass_jar` | 0.210 | 0.833 | 0.835 | 0.677 |
-| `food_wrapper` | 0.865 | 0.265 | 0.392 | 0.186 |
-| **all** | 0.655 | 0.544 | **0.611** | 0.453 |
+| `plastic_bottle` | 0.585 | 0.634 | 0.665 | 0.447 |
+| `can` | 0.794 | 0.512 | 0.545 | 0.428 |
+| `paper` (incl. cardboard) | 0.764 | 0.675 | 0.734 | 0.567 |
+| `glass_jar` | 0.139 | 0.833 | 0.835 | 0.746 |
+| `food_wrapper` | 0.547 | 0.222 | 0.312 | 0.146 |
+| **all** | 0.566 | 0.575 | **0.618** | 0.467 |
+
+For reference, v3 (6 classes) scored 0.611 overall, with `paper` 0.745 but
+`cardboard` only 0.489 (0.432 precision - it was mostly confused with paper).
 
 Interpretation: a 2.5x improvement over the intermediate-demo model (0.248),
 with every class usable. `food_wrapper` remains hardest (visually diverse
