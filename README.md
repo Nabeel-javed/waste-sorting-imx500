@@ -38,13 +38,15 @@ Model progression on the identical 289-image validation set:
 | v1 (+ own images) | 7.8k images incl. our own 202, 100 epochs on GPU server | 0.501 |
 | v2 (+ more public data) | 15.9k images from 5 sources | 0.613 |
 | v3 (robustness training) | same 15.9k with heavy augmentation | 0.611 |
-| **v4 (cardboard merged into paper)** | same data, 5 classes, fine-tuned from v3 | **0.618** |
+| v4 (cardboard merged into paper) | same data, 5 classes, fine-tuned from v3 | 0.618 |
+| **v5 (final, + Open Images)** | 17.7k images, +1.8k human-annotated Open Images | **0.635** |
 
-v4 is the deployed model: it keeps v3's robustness training (tolerant of blur,
-lighting, odd angles) and merges the two most-confused classes - paper and
-cardboard - into one class that shares a physical bin. Cardboard objects went
-from the weakest category (0.489 mAP50, 0.432 precision as a separate class)
-to part of a solid 0.734 class.
+v5 is the final model: it keeps v3's robustness training (tolerant of blur,
+lighting, odd angles), v4's class merge (paper and cardboard were the
+most-confused pair and share a physical bin - cardboard went from the weakest
+category at 0.489 mAP50 / 0.432 precision to part of a solid 0.74 class), and
+adds 1,823 Open Images photos with real human-drawn boxes targeting the two
+weakest classes (can +2,988 boxes, food_wrapper +986 boxes).
 
 ## Project Goal
 
@@ -147,7 +149,7 @@ Main modules:
 
 ## Dataset
 
-### Composition (v2/v3 training set: 15,876 train / 289 val images)
+### Composition (v5 training set: 17,699 train / 289 val images)
 
 The validation split has been kept **identical across all training runs** so
 accuracy numbers stay comparable.
@@ -159,6 +161,7 @@ accuracy numbers stay comparable.
 | Drinking-waste dataset | 3,000 | Cans, plastic and glass bottles, many held in a hand - matches demo conditions. |
 | TACO (Roboflow YOLO export) | 3,230 | Real-world litter; main source of `food_wrapper` boxes (~3,000). |
 | TrashNet | 1,809 | Per-class object photos, auto-labeled with YOLO-World. |
+| Open Images v7 (Google) | 1,823 | Human-annotated boxes: "Tin can" -> `can` (2,988 boxes), "Plastic bag" -> `food_wrapper` (986 boxes). Added in v5. |
 
 Class remaps used:
 
@@ -168,6 +171,9 @@ Class remaps used:
   `HDPEM/PET->plastic_bottle` (capped at 1,000 images/class).
 - TACO (by class id): `Can->can`, `Carton->paper`, `Paper->paper`,
   `Plastic bag & wrapper->food_wrapper`; the ambiguous `Bottle` class was skipped.
+- Open Images v7 (via fiftyone): `Plastic bag->food_wrapper`, `Tin can->can`.
+  Open Images `Bottle` was skipped for the same glass/plastic ambiguity, and it
+  has no jar/glass class, so `glass_jar` got no new data.
 
 The v0-v3 dataset used six classes. For v4 the existing labels were remapped
 in place on the training server (`cardboard` id 3 -> `paper` id 2; glass/wrapper
@@ -191,6 +197,9 @@ python src/auto_label_own_dataset.py --source <own-photos-folder> --out data/own
 python src/merge_own_dataset.py
 python src/auto_label_own_dataset.py --source data/trashnet --out data/trashnet_labeled --prefix trashnet --device cpu
 python src/convert_extra_public.py --extra-root data/public_extra --dataset dataset
+# Open Images (v5 addition): needs `pip install fiftyone`
+python src/download_openimages.py
+python src/integrate_openimages.py data/openimages_yolo oi
 ```
 
 (YOLO-World's CLIP text encoder has device-mismatch bugs on both MPS and CUDA -
@@ -198,7 +207,8 @@ run it with `--device cpu`.)
 
 ## Training
 
-Training runs on a GPU server (RTX A5000). The deployed v3 model:
+Training runs on a GPU server (RTX A5000). The v3 base recipe (from COCO
+weights, 100 epochs):
 
 ```bash
 yolo detect train model=yolov8n.pt data=dataset/data.yaml \
@@ -214,34 +224,44 @@ jitter, rotation, shear, perspective warp, +-70% scale, mixup, and (via the
 camera conditions that clean web photos lack, narrowing the gap between
 validation accuracy and real on-camera behavior. ~2.2 hours for 100 epochs.
 
-The deployed v4 model merges cardboard into paper (5 classes) and fine-tunes
-from the v3 weights instead of starting from COCO, which converges in 30
-epochs (~35 minutes):
+Later versions fine-tune from the previous best weights instead of starting
+from COCO, which converges in 25-30 epochs (~30 minutes). v4 merges cardboard
+into paper (5 classes); v5 adds the Open Images data:
 
 ```bash
+# v4: class merge, fine-tuned from v3
 yolo detect train model=runs/detect/waste_sorting_public_v3/weights/best.pt \
   data=dataset5/data.yaml \
   epochs=30 imgsz=640 batch=64 device=0 workers=12 cache=ram \
   hsv_h=0.02 hsv_s=0.8 hsv_v=0.6 degrees=10 translate=0.2 scale=0.7 \
   shear=2.0 perspective=0.0003 mixup=0.15 close_mosaic=10 \
   name=waste_sorting_public_v4
+
+# v5: + Open Images, fine-tuned from v4 (close_mosaic=8, epochs=25)
+yolo detect train model=runs/detect/waste_sorting_public_v4/weights/best.pt \
+  data=dataset5/data.yaml \
+  epochs=25 imgsz=640 batch=64 device=0 workers=12 cache=ram \
+  hsv_h=0.02 hsv_s=0.8 hsv_v=0.6 degrees=10 translate=0.2 scale=0.7 \
+  shear=2.0 perspective=0.0003 mixup=0.15 close_mosaic=8 \
+  name=waste_sorting_public_v5
 ```
 
-### Results per class (v4, deployed)
+### Results per class (v5, final)
 
 | Class | Precision | Recall | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: |
-| `plastic_bottle` | 0.585 | 0.634 | 0.665 | 0.447 |
-| `can` | 0.794 | 0.512 | 0.545 | 0.428 |
-| `paper` (incl. cardboard) | 0.764 | 0.675 | 0.734 | 0.567 |
-| `glass_jar` | 0.139 | 0.833 | 0.835 | 0.746 |
-| `food_wrapper` | 0.547 | 0.222 | 0.312 | 0.146 |
-| **all** | 0.566 | 0.575 | **0.618** | 0.467 |
+| `plastic_bottle` | 0.666 | 0.593 | 0.654 | 0.446 |
+| `can` | 0.835 | 0.528 | 0.563 | 0.450 |
+| `paper` (incl. cardboard) | 0.785 | 0.639 | 0.738 | 0.571 |
+| `glass_jar` | 0.210 | 0.833 | 0.835 | 0.717 |
+| `food_wrapper` | 0.703 | 0.290 | 0.387 | 0.179 |
+| **all** | 0.640 | 0.577 | **0.635** | 0.473 |
 
-For reference, v3 (6 classes) scored 0.611 overall, with `paper` 0.745 but
-`cardboard` only 0.489 (0.432 precision - it was mostly confused with paper).
+For reference: v4 scored 0.618 overall; v3 (6 classes) scored 0.611, with
+`paper` 0.745 but `cardboard` only 0.489 (0.432 precision - it was mostly
+confused with paper).
 
-Interpretation: a 2.5x improvement over the intermediate-demo model (0.248),
+Interpretation: a 2.6x improvement over the intermediate-demo model (0.248),
 with every class usable. `food_wrapper` remains hardest (visually diverse
 category). Live accuracy is further stabilized by multi-frame voting (below).
 
