@@ -4,6 +4,7 @@ import argparse
 import re
 import sys
 import time
+from collections import Counter, deque
 from pathlib import Path
 
 import cv2
@@ -26,6 +27,13 @@ from src.zone_logic import (
 KNOWN_COLOR = (0, 255, 0)
 UNKNOWN_COLOR = (0, 255, 255)
 WRONG_COLOR = (0, 0, 255)
+
+# Same scan-mode tuning as the on-camera demo (src/imx500_camera_demo.py)
+BANNER_HOLD_S = 1.5  # keep the last verdict on screen this long after votes stop
+SCAN_COLOR = (0, 220, 255)
+VOTE_WINDOW_S = 1.5   # rolling window of per-frame votes
+MIN_VOTES = 6         # frames with a detection required before any verdict
+VOTE_SHARE = 0.6      # winning class must hold this share of the votes
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +64,29 @@ def class_name_for(result, class_id: int) -> str:
     if isinstance(names, dict):
         return str(names.get(class_id, class_id))
     return str(names[class_id])
+
+
+def draw_scan_banner(frame, banner: dict | None) -> None:
+    """Big top-centre banner: what the camera sees and which bin it belongs in."""
+    if banner:
+        title, subtitle, color = banner["title"], banner["sub"], banner.get("color", KNOWN_COLOR)
+    else:
+        title, subtitle, color = "SCAN AN OBJECT", "Hold an item in front of the camera", (200, 200, 200)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (tw, th), _ = cv2.getTextSize(title, font, 1.1, 3)
+    (sw, sh), _ = cv2.getTextSize(subtitle, font, 0.7, 2)
+    width = max(tw, sw) + 40
+    height = th + sh + 46
+    x0 = max(0, (frame.shape[1] - width) // 2)
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, 10), (x0 + width, 10 + height), (25, 25, 25), -1)
+    cv2.addWeighted(overlay, 0.72, frame, 0.28, 0, frame)
+    cv2.rectangle(frame, (x0, 10), (x0 + width, 10 + height), color, 2)
+
+    cv2.putText(frame, title, (x0 + 20, 10 + th + 16), font, 1.1, color, 3, cv2.LINE_AA)
+    cv2.putText(frame, subtitle, (x0 + 20, 10 + th + sh + 32), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
 
 def draw_help_overlay(frame) -> None:
@@ -98,6 +129,11 @@ def main() -> int:
     show_help = True
     window_name = "Waste Sorting Assistant"
 
+    # Multi-frame voting state (same behaviour as the on-camera demo).
+    votes: deque[tuple[float, str, float]] = deque()
+    banner: dict | None = None
+    last_verdict: str | None = None
+
     while True:
         ok, frame = capture.read()
         if not ok:
@@ -107,6 +143,7 @@ def main() -> int:
         result = model(frame, conf=args.conf, imgsz=args.imgsz, verbose=False)[0]
         detections: list[str] = []
         warnings: list[str] = []
+        best_known: tuple[str, float] | None = None
 
         if zone_mode:
             draw_zones(frame)
@@ -124,6 +161,8 @@ def main() -> int:
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             draw_label(frame, label, x1, y1, color=color)
             detections.append(label)
+            if known and (best_known is None or confidence > best_known[1]):
+                best_known = (class_name, confidence)
 
             if zone_mode and known:
                 center_x, center_y = get_object_center(bbox)
@@ -137,13 +176,51 @@ def main() -> int:
                     warnings.append(f"{warning} ({recommended_bin})")
                     draw_label(frame, f"Wrong bin: use {target_zone}", center_x, center_y, color=WRONG_COLOR)
 
-        if detections:
-            panel_lines = [f"Objects: {len(detections)}", *detections[:5]]
+        if zone_mode:
+            if detections:
+                panel_lines = [f"Objects: {len(detections)}", *detections[:5]]
+            else:
+                panel_lines = ["Objects: 0", "No object detected."]
+            if warnings:
+                panel_lines.extend(warnings[:3])
+            draw_status_panel(frame, panel_lines[:9])
         else:
-            panel_lines = ["Objects: 0", "No object detected."]
-        if warnings:
-            panel_lines.extend(warnings[:3])
-        draw_status_panel(frame, panel_lines[:9])
+            now = time.monotonic()
+            if best_known:
+                votes.append((now, best_known[0], best_known[1]))
+            while votes and votes[0][0] < now - VOTE_WINDOW_S:
+                votes.popleft()
+
+            verdict = None
+            if len(votes) >= MIN_VOTES:
+                counts = Counter(cls for _, cls, _ in votes)
+                top_class, top_n = counts.most_common(1)[0]
+                if top_n / len(votes) >= VOTE_SHARE:
+                    top_confs = [c for _, cls, c in votes if cls == top_class]
+                    verdict = (top_class, sum(top_confs) / len(top_confs))
+
+            if verdict:
+                verdict_class, verdict_conf = verdict
+                banner = {
+                    "title": f"{verdict_class.replace('_', ' ').upper()}  ({verdict_conf:.0%})",
+                    "sub": f"Put it in: {get_recommended_bin(verdict_class)}",
+                    "expires": now + BANNER_HOLD_S,
+                }
+                last_verdict = verdict_class
+            elif votes:
+                held = banner and now <= banner["expires"] and last_verdict
+                if not held:
+                    banner = {
+                        "title": "SCANNING...",
+                        "sub": f"Hold the object steady ({min(len(votes), MIN_VOTES)}/{MIN_VOTES})",
+                        "color": SCAN_COLOR,
+                        "expires": now,
+                    }
+                    last_verdict = None
+            elif banner and now > banner["expires"]:
+                banner = None
+                last_verdict = None
+            draw_scan_banner(frame, banner)
 
         if show_help:
             draw_help_overlay(frame)
