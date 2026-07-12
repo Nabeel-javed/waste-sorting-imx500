@@ -382,41 +382,4 @@ pytest tests/ -v
 
 Covers bin mapping, unknown-class fallback, and zone boundary logic.
 
-## Demo Script For Professor
 
-```text
-This is a real-time waste sorting assistant. A YOLOv8n detector identifies six
-waste classes; a Python rule layer maps each class to the correct recycling bin.
-
-The model was trained on ~16,000 images aggregated from four public waste
-datasets plus ~200 images we collected ourselves and labeled semi-automatically
-with an open-vocabulary detector. Training ran on a GPU server; the final model
-was additionally trained with heavy augmentation (blur, lighting, perspective)
-to be robust to live camera conditions.
-
-The trained network was quantized to INT8 and compiled with Sony's toolchain
-into the IMX500 format. Inference runs inside the camera sensor itself - the
-Raspberry Pi only reads the detection tensors from frame metadata and applies
-the bin logic. The live UI uses multi-frame voting: it announces an object only
-when one class wins a clear majority of recent frames, so the verdict you see
-is stable and reliable.
-```
-
-## Limitations
-
-- Trained mostly on public photos; the live camera domain still differs
-  (mitigated by v3 augmentation + voting, not eliminated).
-- `food_wrapper` is the weakest class (visually extremely diverse).
-- The IMX500 memory limit caps the model at YOLOv8n + INT8; per-frame accuracy
-  is bounded by that model capacity.
-- Glass vs. plastic bottles remain visually confusable (paper vs. cardboard
-  was solved in v4 by merging the two classes - they share a bin anyway).
-- Voting stabilizes verdicts but cannot detect an object the model never sees.
-
-## Future Work
-
-- Fine-tune on frames captured by the IMX500 itself (the single biggest
-  remaining accuracy lever - it closes the camera domain gap).
-- Try YOLO11n export, and higher-resolution input if it fits sensor memory.
-- Audio feedback for verdicts; automatic sorting actuator.
-- Physical bin detection instead of virtual zones.
