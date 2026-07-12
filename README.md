@@ -9,9 +9,18 @@ IMX500 camera sensor**, not on the Raspberry Pi CPU.
 Hold up a bottle  ->  "SCANNING..."  ->  "PLASTIC BOTTLE (72%) - Put it in: Plastic / Packaging"
 ```
 
-The full pipeline is working end-to-end: dataset aggregation from five sources,
+The full pipeline is working end-to-end: dataset aggregation from six sources,
 GPU training on a remote server, INT8 quantization through Sony's toolchain,
 on-sensor deployment, and a stabilized live scan UI with multi-frame voting.
+
+## Deliverables
+
+| Deliverable | Where |
+| --- | --- |
+| Trained model (v5, mAP50 0.635) | `models/best.pt` |
+| IMX500 deployment files (INT8) | `models/best_imx_model/packerOut.zip` + `labels.txt` (packaged into `network.rpk` on the Pi by `scripts/deploy_to_pi.sh`) |
+| Source code | `src/` (training, dataset tooling, on-camera demo, Mac demo), `scripts/`, `configs/` |
+| Documentation | this README + `docs/` (deployment notes, dataset description, evaluation results, work log) |
 
 ## Current Project Status
 
