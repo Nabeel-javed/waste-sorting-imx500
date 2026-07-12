@@ -1,0 +1,5 @@
+plastic_bottle
+can
+paper
+glass_jar
+food_wrapper
